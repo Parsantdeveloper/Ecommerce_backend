@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+model User {
+  id      Int      @id @default(autoincrement())
+  name    String?  @db.VarChar(255)
+  image   String?
+  email   String   @unique @db.VarChar(255)
+  password String   @db.VarChar(255)
+  role    Role     @default(USER)
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  phoneNumber String? @db.VarChar(255)
+  address  Address[] @relation("UserAddresses")
+  orders   Order[]   // One user can have multiple orders
+  reviews  Review[]  // One user can have multiple reviews
+  cart     Cart?     // One user can have one cart
+  cartId   Int?     // Foreign key to Cart
+  Bookmark  Bookmark[] // One user can have multiple bookmarks
+  resetCode String? @db.VarChar(255) // For password reset
+  resetCodeExpires DateTime? 
+  esewaPayment  EsewaPayment[]
+}
+model Address {
+  id        Int      @id @default(autoincrement())
+  street    String   @db.VarChar(255)
+  city      String   @db.VarChar(255)
+  state     String   @db.VarChar(255)
+  zipCode   String   @db.VarChar(255)
+  userId    Int
+  phoneNumber String?
+  user      User     @relation("UserAddresses", fields: [userId], references: [id])
+  order   Order[]  
+}
+
+
+model Product {
+  id             Int               @id @default(autoincrement())
+  name           String
+  slug           String            @unique
+  stock          Int               @default(1)
+  description    String
+  features       String[]          // Array of strings
+  specifications Json              // Array of objects
+  price          Float
+  discountPercent Float
+  productType    String
+  sales          Boolean               @default(false)
+  salesLast      DateTime               @default(now())
+  shippingCost   Float
+  isCustom       Boolean           @default(false)
+  custom         Json?             
+  totalPrice     Float
+  video          String?
+  images         Json         
+  categories     String[]          
+  reviews        Review[]
+  averageRating Float  @default(0.0)
+  totalReviews  Int    @default(0)
+  variants       ProductVariant[]  // Relation to variants
+  cartItems      CartItem[]       // Relation to cart items
+  Bookmark        Bookmark[]       // Relation to bookmarks
+  Category      Category[]   @relation("CategoryProducts")      // Relation to categories
+  categoryId    Int[]            // Foreign key to Category
+  createdAt     DateTime         @default(now())
+  updatedAt DateTime? @updatedAt
+  isDeleted     Boolean          @default(false) // Soft delete flag
+  deletedAt     DateTime?        // Timestamp for soft delete
+  orderItems   OrderItem[]     // Relation to order items
+}
+
+model ProductVariant {
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  color      String
+  size       String
+  stock      Int   
+  price      Float
+  image      String? // Specific image for variant
+  imageid   String? // public id for variant image 
+  product    Product  @relation(fields: [productId], references: [id])
+  cart       CartItem [] // relation from CartItem
+  orderItems OrderItem[]
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  products  Product[] @relation("CategoryProducts") // relation from Product
+  image     String?    // Optional image for the category
+  categoryType categoryType? @relation(fields: [categoryTypeId], references: [id])
+  categoryTypeId Int? // Foreign key to categoryType
+  banner    Banner[] // relation from Banner
+}
+
+model categoryType{
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  categories Category[] // relation from Category
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  message   String
+  userId    Int
+  productId Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+}
+
+model Cart {
+  id        Int         @id @default(autoincrement())
+  userId    Int?        @unique   // null for guest carts
+  user      User?       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  totalPrice     Float     @default(0)
+  spinPlayed     Boolean   @default(false)
+  spinReward     String?   // What reward was won
+  shippingCost   Float     @default(100) // default, change on spin
+  discount       Float     @default(0)
+  message        String?   @default("no message")
+}
+
+model CartItem {
+  id        Int     @id @default(autoincrement())
+  cartId    Int
+  productId Int
+  quantity  Int     @default(1)
+  productVariantId Int? // Optional variant for the product
+  productVariant ProductVariant? @relation(fields: [productVariantId], references: [id])
+  cart      Cart    @relation(fields: [cartId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+enum OrderStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+ enum OrderType {
+  THREE_HOUR_DELIVERY
+  CUSTOM
+  STANDARD
+ }
+ enum PaymentMethod {
+  COD
+  ESEWA
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+ model Order {
+  id         Int         @id @default(autoincrement())
+  userId     Int
+  orderType  OrderType? //eg:"3hrdelivery , Custom"
+  isThreeHourDelivery   Boolean @default(false)
+  totalPrice Float
+  discountPercent Float
+  shippingCost Float
+  spinReward     String? 
+  createdAt  DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id])
+  items      OrderItem[]
+  address    Address?   @relation(fields: [addressId], references: [id])
+  addressId  Int?
+  status     OrderStatus  @default(PENDING) // Order status (e.g., Pending, Shipped, Delivered)
+  message    String?
+  PaymentMethod     PaymentMethod @default(COD)
+  PaymentStatus     PaymentStatus @default(PENDING)
+  esewaPayments     EsewaPayment[]
+}
+model EsewaPayment {
+  id  Int   @id @default(autoincrement())
+  userId  Int
+  orderId Int @unique 
+  total_amount   Float
+  transaction_uuid  String @unique 
+  product_code   String
+  transaction_code String? 
+  order   Order   @relation(fields:[orderId], references: [id]) 
+  user    User    @relation(fields: [userId], references: [id])
+  createdAt  DateTime    @default(now())
+}
+
+model OrderItem {
+  id             Int              @id @default(autoincrement())
+  orderId        Int
+  productVariantId Int?
+  prductId       Int
+  quantity       Int
+  pricePerItem   Float
+  order          Order            @relation(fields: [orderId], references: [id])
+  productVariant ProductVariant?  @relation(fields: [productVariantId], references: [id])
+  product        Product          @relation(fields: [prductId], references: [id])
+}
+
+model Bookmark {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  productId Int
+
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId]) // prevents duplicate bookmarks
+}
+
+ model Spin {
+  id             Int      @id @default(autoincrement())
+  title          String   // e.g. “10% OFF, chill gara!”
+  type           SpinType // DISCOUNT, FREE_DELIVERY, CASHBACK, GIFT, MESSAGE
+  value          String   // e.g. "10", "FREE", "CHOCOLATE", "100"
+  probability    Float    // 0.15 means 15% chance
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+}
+
+enum SpinType {
+  DISCOUNT
+  FREE_DELIVERY
+  CASHBACK
+  MESSAGE
+  GIFT
+}
+
+model FeaturedIN{
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  title    String
+  description String
+  imageUrl Json
+  linkUrl String
+  category String
+}
+
+model Banner{
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  title    String
+  description String
+  imageUrl Json
+  linkUrl String
+  categoryId Int
+  category Category @relation(fields: [categoryId], references: [id])
+  isActive Boolean @default(true) 
+}
